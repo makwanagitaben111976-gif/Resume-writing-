@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Resume Builder — Editable & Extensible (Single File)</title>
+
+  <!-- html2pdf (includes html2canvas + jsPDF) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js"
+    integrity="sha512-YcsIP8Vd3Gk2x92e3U8S6hJpFST3+g7H9P6q1i1hAfz3Qk8z8F8m9Z0a2RkJQ8pV4Z3nXvM47E6j0Y6b3vYxw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <style>
+    :root{
+      --page-width: 210mm;
+      --page-height: 297mm;
+      --page-padding: 18mm;
+      --accent: #222;
+      --muted: #666;
+      --heading-font: "Times New Roman", Georgia, serif;
+      --body-font: "Arial", Helvetica, sans-serif;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:#f1f1f1;font-family:var(--body-font);-webkit-font-smoothing:antialiased}
+    .topbar{
+      display:flex;gap:8px;align-items:center;padding:10px;background:#fff;border-bottom:1px solid #ddd;flex-wrap:wrap;
+    }
+    .btn{background:#1f6feb;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;font-weight:600}
+    .btn.secondary{background:#666}
+    .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .flex-right{margin-left:auto;color:#444;font-size:13px}
+    input[type=file]{display:none}
+    .preview-wrap{display:flex;justify-content:center;padding:20px}
+    .resume{
+      width:var(--page-width);min-height:var(--page-height);background:#fff;padding:var(--page-padding);
+      border:3px solid #222;position:relative;color:#111;line-height:1.35;
+    }
+
+    /* Header */
+    .header{display:flex;gap:18px;align-items:flex-start;margin-bottom:14px}
+    .photo-wrap{width:120px;min-width:120px;height:130px;border:1.6px solid #444;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    .photo-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+    .photo-placeholder{font-size:12px;color:var(--muted);padding:6px;text-align:center}
+    .title-block{flex:1;text-align:center;position:relative;padding-top:6px}
+    .resume-title{font-family:var(--heading-font);font-size:30px;font-style:italic;text-decoration:underline;margin:0 0 6px 0}
+    .contact{position:absolute;right:0;top:0;text-align:right;font-style:italic;font-family:var(--heading-font);font-size:14px;white-space:pre-line}
+
+    /* Sections */
+    .section{margin-top:12px;border-top:1px solid #666;padding-top:10px;position:relative}
+    .section-controls{position:absolute;right:0;top:-6px;display:flex;gap:6px}
+    .section-heading{font-weight:700;font-family:var(--heading-font);font-size:16px;margin-bottom:8px;display:inline-block}
+    .box{border:1px solid #666;padding:10px;margin:8px 0}
+    .muted{color:var(--muted);font-style:italic}
+
+    /* Grid personal */
+    .personal-grid{display:grid;grid-template-columns:1fr 2fr;gap:8px 18px;align-items:start;margin-top:6px}
+    .field-title{font-weight:700;letter-spacing:0.6px;text-transform:uppercase}
+
+    /* Education */
+    .edu-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}
+    .edu-table th,.edu-table td{padding:8px;border:1px solid #ddd;vertical-align:top}
+    .edu-actions{display:flex;gap:6px;align-items:center}
+
+    /* Skills tags */
+    .skills-tags{display:flex;flex-wrap:wrap;gap:8px;padding:6px}
+    .skill-tag{background:#eee;padding:6px 8px;border-radius:16px;display:flex;gap:8px;align-items:center}
+    .skill-tag button{background:transparent;border:0;color:#c33;cursor:pointer;font-weight:700}
+
+    /* Small helpers */
+    .small{font-size:13px}
+    .inline-input{border:1px dashed #ccc;padding:4px 6px;border-radius:4px}
+    .hidden{display:none}
+
+    /* Print */
+    @media print{
+      .topbar{display:none}
+      body{background:transparent}
+      .resume{border:1px solid #222}
+    }
+
+    /* Move buttons */
+    .icon-btn{background:#f3f3f3;border:1px solid #ddd;padding:4px 6px;border-radius:4px;cursor:pointer}
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="controls">
+      <label class="btn" for="photoInput">Upload Photo</label>
+      <input id="photoInput" type="file" accept="image/*">
+
+      <div style="display:flex;gap:6px;align-items:center">
+        <button id="addEdu" class="btn">Add Education Row</button>
+        <button id="addSkillBtn" class="btn">Add Skill</button>
+        <button id="addSectionBtn" class="btn">Add Section</button>
+        <button id="downloadPdf" class="btn">Download PDF</button>
+        <button id="printBtn" class="btn secondary">Print</button>
+        <button id="saveBtn" class="btn secondary">Save</button>
+        <button id="loadBtn" class="btn secondary">Load</button>
+        <button id="resetBtn" class="btn secondary">Reset</button>
+      </div>
+    </div>
+
+    <div class="flex-right">Tip: Click any text to edit. You can add/remove sections, rows, skills. Edits auto-save.</div>
+  </div>
+
+  <div class="preview-wrap">
+    <article id="resume" class="resume" lang="en">
+      <header class="header" data-section-type="header">
+        <div class="photo-wrap" id="photoWrap" title="Upload photo from toolbar">
+          <div class="photo-placeholder">Profile Photo</div>
+        </div>
+
+        <div class="title-block">
+          <h1 class="resume-title" contenteditable="true" id="resTitle">Resume</h1>
+          <div class="contact" contenteditable="true" id="contactInfo">
+            Vishnu.B.Makwana
+            Contactno. - +919512658309
+            Emailid. - makwanavishnu30897@gmail.com
+          </div>
+        </div>
+      </header>
+
+      <!-- Career Objective -->
+      <section class="section" data-section-type="objective">
+        <div class="section-controls">
+          <button class="icon-btn move-up">↑</button>
+          <button class="icon-btn move-down">↓</button>
+          <button class="icon-btn section-remove" title="Remove section">✕</button>
+        </div>
+        <div class="section-heading" contenteditable="true">CAREER OBJECTIVE :</div>
+        <div class="box" contenteditable="true" id="objective">
+          To work for an organization where I can utilize my Knowledge and skill with Maximum Potential and to contribute
+          for the excellence and growth to the organization. Always prioritizing safe and efficient rescue during operations
+          while managing Fire Department routine maintenance. Strong skills in leadership, always calm under pressure, and
+          compassionate with individuals in distress while suppressing fires.
+        </div>
+      </section>
+
+      <!-- Personal Profile -->
+      <section class="section" data-section-type="personal">
+        <div class="section-controls">
+          <button class="icon-btn move-up">↑</button>
+          <button class="icon-btn move-down">↓</button>
+          <button class="icon-btn section-remove" title="Remove section">✕</button>
+        </div>
+        <div class="section-heading" contenteditable="true">PERSONAL PROFILE :</div>
+        <div class="box" style="padding-bottom:6px;">
+          <div class="personal-grid">
+            <div class="field-title">Full Name :</div>
+            <div contenteditable="true" id="fullName">MAKWANA VISHNUBHAI BHUPATBHAI</div>
+
+            <div class="field-title">Date of Birth :</div>
+            <div contenteditable="true" id="dob">30/08/1997</div>
+
+            <div class="field-title">Gender :</div>
+            <div contenteditable="true" id="gender">Male</div>
+
+            <div class="field-title">Marital Status :</div>
+            <div contenteditable="true" id="marital">Unmarried</div>
+
+            <div class="field-title">Nationality :</div>
+            <div contenteditable="true" id="nationality">India</div>
+
+            <div class="field-title">Language Known :</div>
+            <div contenteditable="true" id="languages">Hindi, English, Gujarati</div>
+
+            <div class="field-title">Address :</div>
+            <div contenteditable="true" id="address">AT - JANSHALI, TA - LIMBDI, DIST - SURENDRANAGAR - 363425</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Educational Qualification -->
+      <section class="section" data-section-type="education" id="educationSection">
+        <div class="section-controls">
+          <button class="icon-btn move-up">↑</button>
+          <button class="icon-btn move-down">↓</button>
+          <button class="icon-btn section-remove" title="Remove section">✕</button>
+        </div>
+        <div class="section-heading" contenteditable="true">EDUCATIONAL QUALIFICATION :</div>
+
+        <table class="edu-table" id="eduTable">
+          <thead>
+            <tr>
+              <th style="width:16%;">Degree</th>
+              <th style="width:44%;">School/College</th>
+              <th style="width:18%;">Board/University</th>
+              <th style="width:10%;">Year</th>
+              <th style="width:10%;">% / CGPA</th>
+              <th style="width:4%;"> </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td contenteditable="true">SSC</td>
+              <td contenteditable="true">Shree Devanand Swami Vidhyalay Balol</td>
+              <td contenteditable="true">GSEB</td>
+              <td contenteditable="true">2013</td>
+              <td contenteditable="true">61.83</td>
+              <td class="edu-actions"><button class="icon-btn remove-row">✕</button></td>
+            </tr>
+            <tr>
+              <td contenteditable="true">HSC</td>
+              <td contenteditable="true">Sir J. High School Limbdi</td>
+              <td contenteditable="true">GHSEB</td>
+              <td contenteditable="true">2017</td>
+              <td contenteditable="true">48</td>
+              <td class="edu-actions"><button class="icon-btn remove-row">✕</button></td>
+            </tr>
+            <tr>
+              <td contenteditable="true">Graduation (External)</td>
+              <td contenteditable="true">Saurashtra University Rajkot</td>
+              <td contenteditable="true">Saurashtra University</td>
+              <td contenteditable="true">2021</td>
+              <td contenteditable="true">49</td>
+              <td class="edu-actions"><button class="icon-btn remove-row">✕</button></td>
+            </tr>
+            <tr>
+              <td contenteditable="true">Sub Fireman Officer</td>
+              <td contenteditable="true">ITI Kummar</td>
+              <td contenteditable="true">GCVT</td>
+              <td contenteditable="true">2023</td>
+              <td contenteditable="true">73</td>
+              <td class="edu-actions"><button class="icon-btn remove-row">✕</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Computer Qualification -->
+      <section class="section" data-section-type="computer">
+        <div class="section-controls">
+          <button class="icon-btn move-up">↑</button>
+          <button class="icon-btn move-down">↓</button>
+          <button class="icon-btn section-remove" title="Remove section">✕</button>
+        </div>
+        <div class="section-heading" contenteditable="true">COMPUTER QUALIFICATION :</div>
+        <div class="box muted" contenteditable="true">C.C.C. (Course On Computer Concept)</div>
+      </section>
+
+      <!-- Skills -->
+      <section class="section" data-section-type="skills" id="skillsSection">
+        <div class="section-controls">
+          <button class="icon-btn move-up">↑</button>
+          <button class="icon-btn move-down">↓</button>
+          <button class="icon-btn section-remove" title="Remove section">✕</button>
+        </div>
+        <div class="section-heading" contenteditable="true">SKILLS :</div>
+        <div class="box">
+          <div class="skills-tags" id="skillsTags">
+            <span class="skill-tag">First Aid and CPR <button data-skill="remove">✕</button></span>
+            <span class="skill-tag">Emergency Response <button data-skill="remove">✕</button></span>
+            <span class="skill-tag">Equipment Maintenance <button data-skill="remove">✕</button></span>
+            <span class="skill-tag">Team Leadership <button data-skill="remove">✕</button></span>
+          </div>
+          <div style="margin-top:8px">
+            <input id="skillInput" class="inline-input" placeholder="Type a skill and press Add" />
+            <button id="skillAddBtn" class="btn">Add</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Declaration -->
+      <section class="section" data-section-type="declaration">
+        <div class="section-controls">
+          <button class="icon-btn move-up">↑</button>
+          <button class="icon-btn move-down">↓</button>
+          <button class="icon-btn section-remove" title="Remove section">✕</button>
+        </div>
+        <div class="section-heading" contenteditable="true">DECLARATION :</div>
+        <div class="box declaration">
+          <div contenteditable="true" id="declarationText">I hereby declare that the information furnished above is true and best of my knowledge.</div>
+          <div class="sig" style="text-align:right;margin-top:8px" contenteditable="true">Vishnu.b.makwana</div>
+        </div>
+      </section>
+
+    </article>
+  </div>
+
+  <script>
+    // Elements
+    const photoInput = document.getElementById('photoInput');
+    const photoWrap = document.getElementById('photoWrap');
+    const resume = document.getElementById('resume');
+    const downloadBtn = document.getElementById('downloadPdf');
+    const printBtn = document.getElementById('printBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const loadBtn = document.getElementById('loadBtn');
+    const addEduBtn = document.getElementById('addEdu');
+    const eduTable = document.getElementById('eduTable').querySelector('tbody');
+    const addSkillBtn = document.getElementById('addSkillBtn');
+    const skillInput = document.getElementById('skillInput');
+    const skillAddBtn = document.getElementById('skillAddBtn');
+    const skillsTags = document.getElementById('skillsTags');
+    const addSectionBtn = document.getElementById('addSectionBtn');
+
+    // Default snapshot for reset
+    const defaultHTML = resume.innerHTML;
+
+    // ---------- PHOTO ----------
+    photoInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const allowed = ['image/png','image/jpeg','image/jpg','image/webp'];
+      if (!allowed.includes(file.type)) {
+        alert('Please select an image (jpg/png/webp).');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        photoWrap.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = reader.result;
+        img.alt = 'Profile Photo';
+        photoWrap.appendChild(img);
+        triggerSave();
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // ---------- EDUCATION: add/remove rows ----------
+    addEduBtn.addEventListener('click', () => {
+      addEducationRow();
+      triggerSave();
+    });
+
+    function addEducationRow(data = {degree:'',school:'',board:'',year:'',percent:''}) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td contenteditable="true">${escapeHtml(data.degree)}</td>
+        <td contenteditable="true">${escapeHtml(data.school)}</td>
+        <td contenteditable="true">${escapeHtml(data.board)}</td>
+        <td contenteditable="true">${escapeHtml(data.year)}</td>
+        <td contenteditable="true">${escapeHtml(data.percent)}</td>
+        <td class="edu-actions"><button class="icon-btn remove-row">✕</button></td>
+      `;
+      eduTable.appendChild(tr);
+      tr.querySelector('.remove-row').addEventListener('click', () => {
+        tr.remove();
+        triggerSave();
+      });
+    }
+
+    // Delegate remove for initial rows
+    eduTable.querySelectorAll('.remove-row').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        btn.closest('tr').remove();
+        triggerSave();
+      });
+    });
+
+    // ---------- SKILLS ----------
+    addSkillBtn.addEventListener('click', () => {
+      const val = (skillInput.value || '').trim();
+      if (!val) {
+        const newSkill = prompt('Enter new skill:');
+        if (newSkill) addSkill(newSkill.trim());
+      } else {
+        addSkill(val);
+      }
+      skillInput.value = '';
+      triggerSave();
+    });
+    skillAddBtn.addEventListener('click', () => addSkillBtn.click());
+
+    function addSkill(text) {
+      if (!text) return;
+      const span = document.createElement('span');
+      span.className = 'skill-tag';
+      span.innerHTML = `${escapeHtml(text)} <button data-skill="remove">✕</button>`;
+      skillsTags.appendChild(span);
+      span.querySelector('button').addEventListener('click', () => {
+        span.remove();
+        triggerSave();
+      });
+      triggerSave();
+    }
+
+    // ---------- ADD CUSTOM SECTION ----------
+    addSectionBtn.addEventListener('click', () => {
+      const type = prompt('Enter section type (example: experience, projects, certifications, custom):','custom');
+      if (!type) return;
+      const title = prompt('Section title (what will appear as heading):', type.toUpperCase());
+      if (title === null) return;
+      addSection({type:type, title:title});
+      triggerSave();
+    });
+
+    function addSection({type='custom', title='New Section', content='Click here to edit...'} = {}) {
+      const section = document.createElement('section');
+      section.className = 'section';
+      section.setAttribute('data-section-type', type);
+      section.innerHTML = `
+        <div class="section-controls">
+          <button class="icon-btn move-up">↑</button>
+          <button class="icon-btn move-down">↓</button>
+          <button class="icon-btn section-remove" title="Remove section">✕</button>
+        </div>
+        <div class="section-heading" contenteditable="true">${escapeHtml(title)}</div>
+        <div class="box" contenteditable="true">${escapeHtml(content)}</div>
+      `;
+      // Insert before declaration section if exists, else append
+      const decl = resume.querySelector('[data-section-type="declaration"]');
+      if (decl) resume.insertBefore(section, decl);
+      else resume.appendChild(section);
+
+      attachSectionControls(section);
+    }
+
+    // Attach controls for newly created sections
+    function attachSectionControls(section) {
+      const up = section.querySelector('.move-up');
+      const down = section.querySelector('.move-down');
+      const remove = section.querySelector('.section-remove');
+
+      up.addEventListener('click', () => {
+        const prev = section.previousElementSibling;
+        if (prev && prev !== resume.querySelector('.header')) {
+          resume.insertBefore(section, prev);
+          triggerSave();
+        }
+      });
+      down.addEventListener('click', () => {
+        const next = section.nextElementSibling;
+        if (next) {
+          resume.insertBefore(next, section);
+          triggerSave();
+        }
+      });
+      remove.addEventListener('click', () => {
+        if (confirm('Remove this section?')) {
+          section.remove();
+          triggerSave();
+        }
+      });
+    }
+
+    // Attach controls for existing sections on load
+    resume.querySelectorAll('.section').forEach(s => attachSectionControls(s));
+
+    // ---------- SECTION MOVE (up/down for header excluded) ----------
+    document.addEventListener('click', (e) => {
+      // Keep delegation for any dynamic controls handled when created
+    });
+
+    // ---------- SAVE / LOAD (localStorage) ----------
+    const STORAGE_KEY = 'resume_builder_v1_' + (window.location.hostname || 'local');
+
+    // Debounce autosave
+    let saveTimer = null;
+    function triggerSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        saveToLocal();
+      }, 800);
+    }
+
+    function saveToLocal() {
+      try {
+        // Save innerHTML of resume + image (data URL) explicitly
+        const data = {
+          html: resume.innerHTML
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        console.log('Saved to localStorage');
+      } catch (err) {
+        console.error('Save failed', err);
+      }
+    }
+
+    function loadFromLocal(force=false) {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+          if (force) alert('No saved resume found in localStorage.');
+          return false;
+        }
+        const data = JSON.parse(raw);
+        if (!data || !data.html) return false;
+        resume.innerHTML = data.html;
+
+        // Reattach event handlers that were lost by replacing innerHTML
+        reattachAll();
+        return true;
+      } catch (err) {
+        console.error('Load failed', err);
+        return false;
+      }
+    }
+
+    saveBtn.addEventListener('click', () => {
+      saveToLocal();
+      alert('Saved to browser localStorage.');
+    });
+    loadBtn.addEventListener('click', () => {
+      const ok = loadFromLocal(true);
+      if (ok) alert('Loaded saved resume.');
+    });
+
+    // Reattach listeners after loading from storage
+    function reattachAll() {
+      // Reattach photoWrap if image exists
+      const newPhotoWrap = document.getElementById('photoWrap');
+      if (newPhotoWrap && !newPhotoWrap.innerHTML.trim()) {
+        newPhotoWrap.innerHTML = '<div class="photo-placeholder">Profile Photo</div>';
+      }
+
+      // Reattach edu remove buttons
+      const newEduTbody = document.getElementById('eduTable').querySelector('tbody');
+      newEduTbody.querySelectorAll('.remove-row').forEach(btn => {
+        btn.addEventListener('click', () => {
+          btn.closest('tr').remove();
+          triggerSave();
+        });
+      });
+
+      // skills tags remove
+      const newSkills = document.getElementById('skillsTags');
+      newSkills.querySelectorAll('button[data-skill="remove"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          btn.closest('.skill-tag').remove();
+          triggerSave();
+        });
+      });
+
+      // ensure skill input and buttons refer to correct elements (they are static)
+      // attach section controls
+      document.querySelectorAll('.section').forEach(s => {
+        // avoid attaching twice
+        if (!s._controlsAttached) {
+          attachSectionControls(s);
+          s._controlsAttached = true;
+        }
+      });
+
+      // reassign references
+      skillsTags = document.getElementById('skillsTags'); // (note: let->const, but safe to reassign via global var in older browsers)
+      eduTable = document.getElementById('eduTable').querySelector('tbody');
+
+      // ensure contenteditable remains editable
+      document.querySelectorAll('[contenteditable]').forEach(el => el.setAttribute('contenteditable','true'));
+
+      triggerSave();
+    }
+
+    // ---------- RESET ----------
+    resetBtn.addEventListener('click', () => {
+      if (!confirm('Reset resume to default sample? This will clear saved changes.')) return;
+      resume.innerHTML = defaultHTML;
+      localStorage.removeItem(STORAGE_KEY);
+      // reattach
+      reattachAll();
+    });
+
+    // ---------- PDF / PRINT ----------
+    downloadBtn.addEventListener('click', () => {
+      exportPDF();
+    });
+
+    printBtn.addEventListener('click', () => {
+      // Temporarily remove contenteditable attributes for cleaner print
+      const toRestore = [];
+      resume.querySelectorAll('[contenteditable]').forEach(el => {
+        toRestore.push({el, attr: el.getAttribute('contenteditable')});
+        el.removeAttribute('contenteditable');
+      });
+      setTimeout(() => {
+        window.print();
+        // restore
+        toRestore.forEach(o => {
+          if (o.attr !== null) o.el.setAttribute('contenteditable', o.attr);
+        });
+      }, 200);
+    });
+
+    function exportPDF() {
+      // Clone resume and remove editing artifacts
+      const clone = resume.cloneNode(true);
+
+      // Remove data attributes used for script logic
+      clone.querySelectorAll('[data-section-type]').forEach(n=>n.removeAttribute('data-section-type'));
+      clone.querySelectorAll('.section-controls').forEach(n=>n.remove());
+      clone.querySelectorAll('[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
+      clone.querySelectorAll('button').forEach(b => b.remove());
+      clone.querySelectorAll('input').forEach(i => i.remove());
+      clone.style.boxShadow = 'none';
+
+      const wrapper = document.createElement('div');
+      wrapper.style.position = 'fixed';
+      wrapper.style.left = '-9999px';
+      wrapper.appendChild(clone);
+      document.body.appendChild(wrapper);
+
+      const opt = {
+        margin:       10,
+        filename:     'resume.pdf',
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS:true, logging:false },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] }
+      };
+
+      html2pdf().set(opt).from(clone).save().finally(()=> {
+        document.body.removeChild(wrapper);
+      });
+    }
+
+    // ---------- Autosave on edits ----------
+    // Listen for input events across resume to trigger save
+    resume.addEventListener('input', () => triggerSave());
+    // Also on blur to catch contenteditable changes
+    resume.addEventListener('blur', () => triggerSave(), true);
+
+    // ---------- Helper: escapeHtml ----------
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // ---------- Initialization ----------
+    // Try to load saved state automatically
+    window.addEventListener('load', () => {
+      const loaded = loadFromLocal();
+      if (!loaded) {
+        // attach initial controls (for sections loaded from defaultHTML)
+        resume.querySelectorAll('.section').forEach(s => attachSectionControls(s));
+      }
+    });
+
+    // Prevent accidental drop of files onto page
+    window.addEventListener('dragover', e => e.preventDefault());
+    window.addEventListener('drop', e => e.preventDefault());
+
+    // Make sure skill add via Enter in input
+    skillInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addSkillBtn.click();
+      }
+    });
+
+    // Make sure newly added elements trigger save when edited
+    // MutationObserver to detect new contenteditable nodes and attach input listener
+    const mo = new MutationObserver((mutations) => {
+      let added = false;
+      for (const m of mutations) {
+        if (m.addedNodes && m.addedNodes.length) {
+          added = true;
+          break;
+        }
+      }
+      if (added) {
+        resume.querySelectorAll('[contenteditable]').forEach(el => {
+          el.addEventListener('input', () => triggerSave());
+        });
+      }
+    });
+    mo.observe(resume, {childList:true, subtree:true});
+
+  </script>
+</body>
+</html>
